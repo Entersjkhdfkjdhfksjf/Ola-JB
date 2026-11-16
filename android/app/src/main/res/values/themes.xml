@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.S1Toolkit" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>
