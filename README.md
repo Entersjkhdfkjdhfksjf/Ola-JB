@@ -54,7 +54,7 @@ Built with plain Android Views (no Compose) to keep the build simple, and
 marshaller -- no generated `.proto` stub, since the daemon only has the one
 weakly-typed method.
 
-## Building
+## Building (Android)
 
 GitHub Actions (`.github/workflows/build-apk.yml`) builds a debug APK on
 every push and uploads it as a workflow artifact -- check the Actions tab
@@ -64,6 +64,37 @@ every line and build it yourself.
 
 To build locally instead: open `android/` in Android Studio, or run
 `cd android && gradle assembleDebug` with Gradle installed.
+
+## iOS app (`ios/`)
+
+Same idea, same wire protocol, written in Swift against
+[grpc-swift](https://github.com/grpc/grpc-swift) with the same hand-rolled
+byte payload trick as the Python/Kotlin clients -- no generated `.proto`
+stub needed.
+
+The project is described with [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`ios/project.yml`) instead of a committed `.xcodeproj`, so there's nothing
+binary to review -- the whole project is readable text.
+
+**Running it on your own iPhone** (the only way to get it signed without
+handing anyone your Apple ID or a paid developer account):
+
+```bash
+brew install xcodegen
+cd ios
+xcodegen generate
+open S1Toolkit.xcodeproj
+```
+
+In Xcode: select your iPhone as the run destination, pick your personal
+team under Signing & Capabilities (free, no paid account needed for a
+development build), and hit Run. That's the normal way any indie iOS dev
+side-loads a debug build to their own device -- no credentials ever leave
+your Mac.
+
+`.github/workflows/build-ios.yml` builds the Simulator target on every
+push (no signing required for that), purely so CI catches compile errors
+before you ever open Xcode.
 
 ## Safety notes
 

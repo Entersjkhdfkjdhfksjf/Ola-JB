@@ -5,3 +5,7 @@ android/local.properties
 __pycache__/
 *.pyc
 *.png
+
+ios/S1Toolkit.xcodeproj/
+ios/.build/
+ios/DerivedData/

@@ -1,0 +1,32 @@
+name: S1Toolkit
+options:
+  bundleIdPrefix: dev.aarav
+  deploymentTarget:
+    iOS: "16.0"
+
+packages:
+  GRPCSwift:
+    url: https://github.com/grpc/grpc-swift.git
+    from: "1.21.0"
+
+targets:
+  S1Toolkit:
+    type: application
+    platform: iOS
+    sources:
+      - path: S1Toolkit
+    dependencies:
+      - package: GRPCSwift
+        product: GRPC
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.aarav.s1toolkit
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: >-
+          Connects to your scooter's head unit over the same local Wi-Fi
+          network to open Settings and other screens.
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
