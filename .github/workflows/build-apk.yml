@@ -19,13 +19,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # ubuntu-latest runners already ship a full Android SDK with
-      # ANDROID_SDK_ROOT set and licenses pre-accepted, so no setup
-      # action is needed for the SDK itself.
-      - name: Install required SDK packages
-        run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      # ubuntu-latest runners ship a preinstalled Android SDK with
+      # ANDROID_SDK_ROOT set and licenses already accepted, and AGP will
+      # auto-download any specific platform/build-tools version it's
+      # still missing, so no manual sdkmanager step is needed here.
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
