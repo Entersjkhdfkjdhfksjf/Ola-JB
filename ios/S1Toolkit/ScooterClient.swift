@@ -57,11 +57,13 @@ final class ScooterClient {
     func exec(_ command: String, timeoutSeconds: Int64 = 30) async throws -> (status: Int, message: String) {
         guard let channel else { throw ClientError.notConnected }
         let options = CallOptions(timeLimit: .timeout(.seconds(timeoutSeconds)))
-        let call = channel.makeUnaryCall(
+        // Request and response are both the same plain-bytes payload type,
+        // so pin the generic response type via an explicit annotation on
+        // the call itself rather than a non-existent `responseType:` arg.
+        let call: UnaryCall<RawPayload, RawPayload> = channel.makeUnaryCall(
             path: "/wifican.WifiCanRpc/ExecuteADBCommand",
             request: RawPayload(data: Self.encodeCommand(command)),
-            callOptions: options,
-            responseType: RawPayload.self)
+            callOptions: options)
         let response = try await call.response.get()
         return Self.decodeReply(response.data)
     }
