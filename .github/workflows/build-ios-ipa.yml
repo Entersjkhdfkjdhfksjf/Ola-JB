@@ -1,0 +1,69 @@
+name: Build iOS Unsigned IPA
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/build-ios-ipa.yml'
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  unsigned-ipa:
+    name: Build unsigned device IPA
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cd ios
+          xcodegen generate
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      # No signing identity, no provisioning profile, no Apple account
+      # involved anywhere in this job -- the output is an UNSIGNED .app,
+      # packaged as an .ipa. It will not install as-is: you still sign it
+      # yourself on your own Mac (Xcode, or a sideloading tool such as
+      # AltStore/Sideloadly using your own Apple ID) before it'll run on
+      # a real iPhone. That signing step is exactly where a developer
+      # account or Apple ID is required, and it never happens here.
+      - name: Build unsigned .app for a real device
+        run: |
+          cd ios
+          xcodebuild \
+            -project S1Toolkit.xcodeproj \
+            -scheme S1Toolkit \
+            -sdk iphoneos \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Package as .ipa
+        run: |
+          cd ios
+          APP_PATH="build/Build/Products/Debug-iphoneos/S1Toolkit.app"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r -q S1Toolkit-unsigned.ipa Payload
+          ls -la S1Toolkit-unsigned.ipa
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: S1Toolkit-unsigned-ipa
+          path: ios/S1Toolkit-unsigned.ipa

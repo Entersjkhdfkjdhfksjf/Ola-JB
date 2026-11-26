@@ -92,9 +92,26 @@ development build), and hit Run. That's the normal way any indie iOS dev
 side-loads a debug build to their own device -- no credentials ever leave
 your Mac.
 
-`.github/workflows/build-ios.yml` builds the Simulator target on every
-push (no signing required for that), purely so CI catches compile errors
-before you ever open Xcode.
+`.github/workflows/build-ios.yml` has two jobs:
+
+1. **Simulator build** -- compiles against the iOS Simulator SDK on every
+   push, no signing involved, just a fast correctness check.
+2. **Unsigned device IPA** -- builds an unsigned `.app` for a real iPhone
+   (`-sdk iphoneos`, `CODE_SIGNING_ALLOWED=NO`) and zips it into
+   `S1Toolkit-unsigned.ipa`, uploaded as a workflow artifact under the
+   Actions tab.
+
+That IPA is **not installable as-is** -- it has no signature. To actually
+get it on your phone, sign it yourself with your own Apple ID using a
+sideloading tool such as [AltStore](https://altstore.io) or
+[Sideloadly](https://sideloadly.io): both take an unsigned `.ipa`, apply
+your personal free-tier signing certificate locally, and install it. No
+Apple credentials are ever involved in the GitHub Actions build itself --
+signing only happens on your own machine, with the tool of your choice.
+
+If you'd rather just run it straight from source, the `xcodegen generate
+&& open S1Toolkit.xcodeproj` route above works too and skips the IPA
+step entirely.
 
 ## Safety notes
 
