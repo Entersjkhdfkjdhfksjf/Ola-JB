@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">S1 Toolkit</string>
     <string name="connect">Connect</string>
+    <string name="scan">Scan for scooter</string>
     <string name="settings">Settings</string>
     <string name="wifi">Wi-Fi</string>
     <string name="browser">Browser</string>

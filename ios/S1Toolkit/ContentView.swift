@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var log: String = ""
     @State private var client: ScooterClient?
     @State private var connecting = false
+    @State private var scanning = false
 
     var body: some View {
         ScrollView {
@@ -17,9 +18,14 @@ struct ContentView: View {
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
 
-                Button(connecting ? "Connecting…" : "Connect") { connect() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(connecting || address.isEmpty)
+                HStack {
+                    Button(scanning ? "Scanning…" : "Scan for scooter") { scan() }
+                        .buttonStyle(.bordered)
+                        .disabled(scanning)
+                    Button(connecting ? "Connecting…" : "Connect") { connect() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(connecting || address.isEmpty)
+                }
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     actionButton("Settings") { try await $0.openIntent("android.settings.SETTINGS") }
@@ -59,6 +65,45 @@ struct ContentView: View {
         Button(title) { run(label: title, action) }
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity)
+    }
+
+    private func scan() {
+        scanning = true
+        appendLog("Scanning the current Wi-Fi link for the scooter...")
+        Task {
+            let candidates = await Task.detached(priority: .userInitiated) {
+                NeighborScanner.findCandidates()
+            }.value
+
+            if candidates.isEmpty {
+                appendLog("No IPv6 neighbors found. Make sure your iPhone and the scooter " +
+                          "are on the same Wi-Fi/hotspot, then try again -- or type the " +
+                          "address in manually.")
+                scanning = false
+                return
+            }
+
+            appendLog("Found \(candidates.count) candidate(s), checking each for the scooter's service...")
+            for candidate in candidates {
+                appendLog("  trying \(candidate.address) ...")
+                let c = ScooterClient(host: candidate.address)
+                do {
+                    try await c.connect(timeoutSeconds: 2)
+                    client?.close()
+                    client = c
+                    address = candidate.address
+                    appendLog("Found it: \(candidate.address). Connected.")
+                    scanning = false
+                    return
+                } catch {
+                    c.close()
+                    // not the scooter, or not answering -- try the next candidate
+                }
+            }
+            appendLog("None of the candidates answered on the scooter's service. " +
+                      "It may not be awake, or not on this network yet.")
+            scanning = false
+        }
     }
 
     private func connect() {

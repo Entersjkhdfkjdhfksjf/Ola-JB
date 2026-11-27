@@ -8,7 +8,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * One screen: enter the scooter's link-local IPv6 address once, then tap
@@ -35,6 +37,7 @@ class MainActivity : AppCompatActivity() {
         logScroll = findViewById(R.id.logScroll)
 
         findViewById<Button>(R.id.connectButton).setOnClickListener { connect() }
+        findViewById<Button>(R.id.scanButton).setOnClickListener { scan() }
         findViewById<Button>(R.id.settingsButton).setOnClickListener {
             runAction("Settings") { it.openIntent("android.settings.SETTINGS") }
         }
@@ -90,6 +93,39 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 log("Connection failed: ${e.message}")
             }
+        }
+    }
+
+    private fun scan() {
+        log("Scanning the current Wi-Fi link for the scooter...")
+        lifecycleScope.launch {
+            val candidates = withContext(Dispatchers.IO) {
+                NeighborScanner.findCandidates(this@MainActivity)
+            }
+            if (candidates.isEmpty()) {
+                log("No IPv6 neighbors found. Make sure both this phone and the " +
+                    "scooter are on the same Wi-Fi/hotspot, then try again -- or " +
+                    "type the address in manually if scanning isn't supported here.")
+                return@launch
+            }
+            log("Found ${candidates.size} candidate(s), checking each for the scooter's service...")
+            for (candidate in candidates) {
+                log("  trying ${candidate.address} ...")
+                val c = ScooterClient(candidate.address)
+                try {
+                    withContext(Dispatchers.IO) { c.connect(waitSeconds = 2L) }
+                    client?.close()
+                    client = c
+                    addressInput.setText(candidate.address)
+                    log("Found it: ${candidate.address}. Connected.")
+                    return@launch
+                } catch (e: Exception) {
+                    c.close()
+                    // not the scooter (or not answering) -- try the next candidate
+                }
+            }
+            log("None of the candidates answered on the scooter's service. " +
+                "It may not be awake, or not on this network yet.")
         }
     }
 
