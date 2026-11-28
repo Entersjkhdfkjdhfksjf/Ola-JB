@@ -12,6 +12,16 @@ import Foundation
 /// and each reply's source address comes back directly from `recvfrom`,
 /// so there's no separate neighbor-table lookup needed at all (iOS
 /// doesn't expose one to apps anyway).
+///
+/// Deliberately does NOT assume "en0" is the right interface. That's only
+/// the Wi-Fi interface when the iPhone is a *client* joining someone
+/// else's network -- when it's hosting a Personal Hotspot instead, the
+/// interface actually carrying traffic to/from connected devices is a
+/// different one (commonly seen as "ap0" or a bridge interface,
+/// depending on iOS version and hotspot mode). Rather than guess a name
+/// that changes across configurations, this enumerates every live,
+/// non-loopback interface that currently has a link-local IPv6 address
+/// and scans all of them.
 enum NeighborScanner {
 
     struct Candidate {
@@ -19,13 +29,47 @@ enum NeighborScanner {
         let iface: String
     }
 
-    /// Picks the Wi-Fi interface -- "en0" on essentially every iPhone.
-    private static func wifiInterfaceName() -> String {
-        "en0"
+    private static func candidateInterfaces() -> [String] {
+        var names: [String] = []
+        var ifaddrPtr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddrPtr) == 0, let first = ifaddrPtr else { return [] }
+        defer { freeifaddrs(ifaddrPtr) }
+
+        let upFlag = UInt32(bitPattern: Int32(IFF_UP))
+        let loopbackFlag = UInt32(bitPattern: Int32(IFF_LOOPBACK))
+
+        var ptr: UnsafeMutablePointer<ifaddrs>? = first
+        while let p = ptr {
+            defer { ptr = p.pointee.ifa_next }
+
+            guard let sa = p.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET6) else { continue }
+            let flags = p.pointee.ifa_flags
+            guard flags & upFlag != 0, flags & loopbackFlag == 0 else { continue }
+
+            let name = String(cString: p.pointee.ifa_name)
+            if name == "lo0" || names.contains(name) { continue }
+
+            let sin6 = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee }
+            var addrCopy = sin6.sin6_addr
+            var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+            inet_ntop(AF_INET6, &addrCopy, &buf, socklen_t(INET6_ADDRSTRLEN))
+            if String(cString: buf).hasPrefix("fe80:") {
+                names.append(name)
+            }
+        }
+        return names
     }
 
     static func findCandidates(timeout: TimeInterval = 2.0) -> [Candidate] {
-        let iface = wifiInterfaceName()
+        var all: [Candidate] = []
+        for iface in candidateInterfaces() {
+            all.append(contentsOf: scan(iface: iface, timeout: timeout))
+        }
+        var seen = Set<String>()
+        return all.filter { seen.insert($0.address).inserted }
+    }
+
+    private static func scan(iface: String, timeout: TimeInterval) -> [Candidate] {
         let ifIndex = if_nametoindex(iface)
         guard ifIndex != 0 else { return [] }
 
@@ -33,16 +77,15 @@ enum NeighborScanner {
         guard sock >= 0 else { return [] }
         defer { close(sock) }
 
-        var tv = timeval(tv_sec: 2, tv_usec: 0)
+        var tv = timeval(tv_sec: Int(timeout), tv_usec: 0)
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
-        // Destination: ff02::1 (all-nodes multicast), scoped to our Wi-Fi interface.
+        // Destination: ff02::1 (all-nodes multicast), scoped to this interface.
         var dest = sockaddr_in6()
         dest.sin6_family = sa_family_t(AF_INET6)
         dest.sin6_port = 0
         dest.sin6_scope_id = ifIndex
         withUnsafeMutableBytes(of: &dest.sin6_addr) { raw in
-            // ff02::1
             raw.storeBytes(of: UInt8(0xff), toByteOffset: 0, as: UInt8.self)
             raw.storeBytes(of: UInt8(0x02), toByteOffset: 1, as: UInt8.self)
             raw.storeBytes(of: UInt8(0x01), toByteOffset: 15, as: UInt8.self)
